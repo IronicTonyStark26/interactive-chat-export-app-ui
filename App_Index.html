@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beautiful Chat Web App</title>
+
+<!-- jsPDF for PDF export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111b21;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.chat-container {
+    width: 90%;
+    max-width: 800px;
+    height: 80vh;
+    background: #0b141a;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+
+/* Header */
+.chat-header {
+    background: #202c33;
+    color: #e9edef;
+    padding: 20px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-header button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 8px;
+    background: #00a884;
+    color: white;
+    cursor: pointer;
+}
+
+.chat-header button:hover {
+    background: #02c39a;
+}
+
+/* Messages Area */
+.chat-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background-image: url("https://www.transparenttextures.com/patterns/asfalt-dark.png");
+}
+
+/* Message Bubble */
+.message {
+    max-width: 70%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 1rem;
+    line-height: 1.4;
+    position: relative;
+    cursor: pointer;
+    word-wrap: break-word;
+}
+
+/* Received (Person A) */
+.received {
+    background: #DCF8C6; /* WhatsApp green bubble */
+    color: #000;
+    align-self: flex-start;
+    border-top-left-radius: 0;
+}
+
+/* Sent (Person B) */
+.sent {
+    background: #E5E5EA; /* WhatsApp gray bubble */
+    color: #000;
+    align-self: flex-end;
+    border-top-right-radius: 0;
+}
+
+/* Time */
+.time {
+    font-size: 10px;
+    opacity: 0.7;
+    margin-top: 4px;
+    text-align: right;
+}
+
+/* Input Area */
+.chat-input {
+    display: flex;
+    padding: 15px;
+    background: #202c33;
+}
+
+.chat-input select {
+    margin-right: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    border: none;
+    background: #2a3942;
+    color: white;
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 25px;
+    border: none;
+    outline: none;
+    background: #2a3942;
+    color: white;
+    font-size: 1rem;
+}
+
+.chat-input button {
+    margin-left: 10px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 50%;
+    background: #00a884;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.chat-input button:hover {
+    background: #02c39a;
+}
+
+/* Scrollbar Styling */
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+</style>
+</head>
+<body>
+
+<div class="chat-container">
+
+    <div class="chat-header">
+        WhatsApp Web App
+        <button id="exportPdf">Export PDF</button>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+        <!-- Messages appear here -->
+    </div>
+
+    <div class="chat-input">
+        <select id="senderSelect">
+            <option value="A">Person A (Me)</option>
+            <option value="B">Person B (AI Bot)</option>
+        </select>
+        <input type="text" id="messageInput" placeholder="Type a message...">
+        <button id="sendBtn">➤</button>
+    </div>
+
+</div>
+
+<script>
+const chatMessages = document.getElementById('chatMessages');
+const messageInput = document.getElementById('messageInput');
+const sendBtn = document.getElementById('sendBtn');
+const senderSelect = document.getElementById('senderSelect');
+const exportPdf = document.getElementById('exportPdf');
+
+// Load previous messages from localStorage
+let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+chatHistory.forEach(msg => addMessageToUI(msg.sender, msg.text, msg.time));
+
+function addMessageToUI(sender, text, time=null) {
+    if (!time) time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', sender === 'A' ? 'received' : 'sent');
+    msgDiv.innerHTML = `${text}<div class="time">${time}</div>`;
+    msgDiv.contentEditable = true;
+    msgDiv.addEventListener('blur', () => updateMessageInStorage(msgDiv, sender, time));
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Send Button
+sendBtn.addEventListener('click', () => {
+    const text = messageInput.value.trim();
+    if (!text) return;
+    const sender = senderSelect.value;
+    const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    addMessageToUI(sender, text, time);
+
+    chatHistory.push({sender, text, time});
+    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    messageInput.value = '';
+});
+
+// Update after editing
+function updateMessageInStorage(div, sender, oldTime) {
+    const newText = div.childNodes[0].textContent;
+    const msgIndex = chatHistory.findIndex(m => m.sender === sender && m.time === oldTime);
+    if (msgIndex > -1) {
+        chatHistory[msgIndex].text = newText;
+        localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    }
+}
+
+// Beautiful PDF export
+exportPdf.addEventListener('click', () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit: 'pt', format: 'a4'});
+    const pageWidth = doc.internal.pageSize.width;
+    let y = 40;
+
+    chatHistory.forEach(msg => {
+        const padding = 10;
+        const lineHeight = 14;
+        const maxWidth = pageWidth * 0.6; // bubble max width
+
+        // Prepare text lines
+        const lines = doc.splitTextToSize(msg.text, maxWidth - 2*padding);
+        const bubbleHeight = lines.length * lineHeight + 2*padding;
+
+        // X position
+        const x = msg.sender === 'A' ? 40 : pageWidth - maxWidth - 40;
+
+        // Bubble color
+        doc.setFillColor(msg.sender === 'A' ? 220 : 229, msg.sender === 'A' ? 248 : 229, msg.sender === 'A' ? 198 : 234);
+
+        // Draw bubble
+        doc.roundedRect(x, y, maxWidth, bubbleHeight, 8, 8, 'F');
+
+        // Draw text
+        doc.setTextColor(0,0,0);
+        doc.setFontSize(11);
+        doc.text(lines, x + padding, y + padding + 10);
+
+        // Draw time
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(msg.time, x + maxWidth - padding - doc.getTextWidth(msg.time), y + bubbleHeight - 4);
+
+        y += bubbleHeight + 10;
+
+        // Page break
+        if (y > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            y = 40;
+        }
+    });
+
+    doc.save('chat.pdf');
+});
+</script>
+
+</body>
+</html>
